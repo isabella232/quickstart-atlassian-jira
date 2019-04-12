@@ -1,0 +1,14 @@
+[
+  {
+    "ParameterKey":"KeyPairName",
+    "ParameterValue":"{KeyPairName}"
+  },
+  {
+    "ParameterKey":"CustomDnsName",
+    "ParameterValue":"{CustomDnsName}"
+  },
+  {
+    "ParameterKey":"SSLCertificateARN",
+    "ParameterValue":"{SSLCertificateARN}"
+  }
+]
