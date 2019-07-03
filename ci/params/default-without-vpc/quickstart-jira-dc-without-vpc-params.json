@@ -21,7 +21,7 @@
   },
   {
     "ParameterKey": "DBInstanceClass",
-    "ParameterValue": "m4.large"
+    "ParameterValue": "db.m4.large"
   },
   {
     "ParameterKey": "DBStorageType",
