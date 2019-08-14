@@ -1,6 +1,6 @@
 [
   {
-    "ParameterKey": "AssociatePublicIpAddress",
+    "ParameterKey": "InternetFacingLoadBalancer",
     "ParameterValue": "false"
   },
   {
@@ -18,10 +18,6 @@
   {
     "ParameterKey": "QSS3KeyPrefix",
     "ParameterValue": "quickstart-atlassian-jira/"
-  },
-  {
-    "ParameterKey": "CidrBlock",
-    "ParameterValue": "10.0.0.0/16"
   },
   {
     "ParameterKey": "CidrBlock",
