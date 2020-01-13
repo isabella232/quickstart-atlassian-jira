@@ -626,8 +626,6 @@ Conditions:
     !Equals [!Ref DBEngine, "Amazon Aurora PostgreSQL"]
   DBEnginePostgres:
     !Equals [!Ref DBEngine, "PostgreSQL"]
-  IsDoingRestore:
-    !Not [!Equals [!Ref BackupManifestURL, '']]
 Mappings:
   AWSInstanceType2Arch:
     c4.large:
@@ -967,7 +965,7 @@ Resources:
         - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonEC2RoleforSSM'
         - !Sub 'arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy'
         # FIXME: Make this dependant on restore URL being set?
-        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonS3ReadOnlyAccess'
       Path: /
       Policies:
         - PolicyName: JiraClusterNodePolicy
