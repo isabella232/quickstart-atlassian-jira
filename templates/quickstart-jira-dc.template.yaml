@@ -513,7 +513,7 @@ Parameters:
       - Software
       - ServiceDesk
   JiraVersion:
-    Default: 8.5.0
+    Default: 8.5.3
     AllowedPattern: '(\d+\.\d+\.\d+(-?.*))|(latest)'
     ConstraintDescription: Must be a valid version number or 'latest'; for example, 8.1.0 for Jira Software, or 4.1.0 for ServiceDesk.
     Description: The version of Jira Software or Jira Service Desk to install. Find valid versions at https://confluence.atlassian.com/x/TVlNLg (Jira Software), https://confluence.atlassian.com/x/jh9-Lg (Jira Service Desk), or https://confluence.atlassian.com/x/XM2EO (Atlassian Enterprise Releases).
@@ -975,7 +975,11 @@ Resources:
             Version: 2012-10-17
             Statement:
               - Action:
+                  - 'autoscaling:DescribeTags'
+                  - 'autoscaling:CreateOrUpdateTags'
+                  - 'ec2:CreateTags'
                   - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeTags'
                   - 'route53:ListHostedZones'
                   - 'route53:ListResourceRecordSet'
                 Effect: Allow
@@ -1013,6 +1017,13 @@ Resources:
           PropagateAtLaunch: true
         - Key: Cluster
           Value: !Ref AWS::StackName
+          PropagateAtLaunch: true
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: b60a7d71eafcd55d12d058032fbdef756bb3ecef"
+          PropagateAtLaunch: true
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 20200119:22.41"
           PropagateAtLaunch: true
 
   ClusterNodeLaunchConfig:
@@ -1178,6 +1189,11 @@ Resources:
           Value: !Join [' ', [!Ref 'AWS::StackName', 'cluster shared-files']]
         - Key: Application
           Value: !Ref AWS::StackId
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: b60a7d71eafcd55d12d058032fbdef756bb3ecef"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 20200119:22.41"
   EFSMountAz1:
     Type: AWS::EFS::MountTarget
     Properties:
@@ -1260,6 +1276,12 @@ Resources:
           Value: !Sub ["${StackName}-LoadBalancer", StackName: !Ref 'AWS::StackName']
         - Key: Cluster
           Value: !Ref AWS::StackName
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: b60a7d71eafcd55d12d058032fbdef756bb3ecef"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 20200119:22.41"
+
   LoadBalancerHTTPListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -1318,6 +1340,11 @@ Resources:
           Value: MainTargetGroup
         - Key: Cluster
           Value: !Ref AWS::StackName
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: b60a7d71eafcd55d12d058032fbdef756bb3ecef"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 20200119:22.41"
     DependsOn:
       - LoadBalancer
   LoadBalancerCname:
@@ -1383,6 +1410,11 @@ Resources:
       Tags:
         - Key: Name
           Value: !Join [' ', [!Ref "AWS::StackName", 'sg']]
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: b60a7d71eafcd55d12d058032fbdef756bb3ecef"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 20200119:22.41"
       VpcId:
         Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
   SecurityGroupIngress:
@@ -1396,6 +1428,7 @@ Resources:
   EncryptionKey:
     Condition: UseDatabaseEncryption
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Type: AWS::KMS::Key
     Properties:
       KeyPolicy:
@@ -1411,6 +1444,11 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ["${StackName} Encryption Key", {StackName: !Ref 'AWS::StackName'}]
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: b60a7d71eafcd55d12d058032fbdef756bb3ecef"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 20200119:22.41"
   EncryptionKeyAlias:
     Condition: UseDatabaseEncryption
     Type: AWS::KMS::Alias
