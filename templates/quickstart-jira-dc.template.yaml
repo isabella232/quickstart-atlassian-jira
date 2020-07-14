@@ -332,14 +332,16 @@ Parameters:
     AllowedValues:
       - 'PostgreSQL'
       - 'Amazon Aurora PostgreSQL'
-    ConstraintDescription: Must be 'Amazon Aurora PostgreSQL' or 'PostgreSQL'.
+      - 'MySQL'
+    ConstraintDescription: Must be 'Amazon Aurora PostgreSQL', 'PostgreSQL' or 'MySQL'.
     Type: String
   DBEngineVersion:
-    Default: 9
+    Default: "9"
     AllowedValues:
-      - 9
-      - 10
-      - 11
+      - "9"
+      - "10"
+      - "11"
+      - "5.7"
     Description: "The database engine version to use; we'll install a suitable minor version for your chosen engine. Make sure that the Jira version you're installing supports the database engine selected. Check https://confluence.atlassian.com/x/bqr1Nw to verify this."
     Type: String
   DBInstanceClass:
@@ -655,6 +657,8 @@ Conditions:
     !Equals [!Ref DBEngine, "Amazon Aurora PostgreSQL"]
   DBEnginePostgres:
     !Equals [!Ref DBEngine, "PostgreSQL"]
+  DBEngineMySQL:
+    !Equals [!Ref DBEngine, "MySQL"]
   UseBastionHost: !And
     - !Equals [!Ref BastionHostRequired, true]
     - !Condition KeyProvided
@@ -1099,7 +1103,7 @@ Resources:
                     - !If [DoSSL, "ATL_SSL_PROXY=true", !Ref "AWS::NoValue"]
                     - !Sub ["ATL_AWS_STACK_NAME=${StackName}", StackName: !Ref "AWS::StackName"]
                     - !Sub ["ATL_CATALINA_OPTS=\"${CatalinaOpts} ${MailOpts}\"", { CatalinaOpts: !Ref CatalinaOpts, MailOpts: !If [DisableMail, '-Datlassian.mail.senddisabled=true -Datlassian.mail.fetchdisabled=true -Datlassian.mail.popdisabled=true', ''] }]
-                    - !Sub ["ATL_DB_ENGINE=${DBEngine}", DBEngine: !If [DBEngineAurora, aurora_postgres, !If [DBEnginePostgres, rds_postgres, '']]]
+                    - !Sub ["ATL_DB_ENGINE=${DBEngine}", DBEngine: !If [DBEngineAurora, aurora_postgres, !If [DBEnginePostgres, rds_postgres, rds_mysql]]]
                     - !Sub ["ATL_DB_HOST=${DBEndpointAddress}", DBEndpointAddress: !GetAtt DB.Outputs.RDSEndPointAddress]
                     - !Sub ["ATL_DB_MAXIDLE=${DBMaxIdle}", DBMaxIdle: !Ref DBMaxIdle]
                     - !Sub ["ATL_DB_MAXWAITMILLIS=${DBMaxWaitMillis}", DBMaxWaitMillis: !Ref DBMaxWaitMillis]
@@ -1116,7 +1120,12 @@ Resources:
                     - !Sub ["ATL_DB_TIMEBETWEENEVICTIONRUNSMILLIS=${DBTimeBetweenEvictionRunsMillis}", DBTimeBetweenEvictionRunsMillis: !Ref DBTimeBetweenEvictionRunsMillis]
                     - !Sub ["ATL_HOSTEDZONE=${HostedZone}", HostedZone: !Ref HostedZone]
                     - !Sub ["ATL_JDBC_PASSWORD='${DBPassword}'", DBPassword: !Ref DBPassword]
-                    - !Sub ["ATL_JDBC_URL=jdbc:postgresql://${DBEndpointAddress}:${DBEndpointPort}/jira?targetServerType=master", { DBEndpointAddress: !GetAtt DB.Outputs.RDSEndPointAddress, DBEndpointPort: !GetAtt DB.Outputs.RDSEndPointPort }]
+                    - !Sub
+                        - ATL_JDBC_URL=jdbc:${DBEngine}://${DBEndpointAddress}:${DBEndpointPort}/jira${DBParams}
+                        - DBEngine: !If [DBEngineMySQL, 'mysql', postgres]
+                          DBEndpointAddress: !GetAtt DB.Outputs.RDSEndPointAddress
+                          DBEndpointPort: !GetAtt DB.Outputs.RDSEndPointPort
+                          DBParams: !If [DBEngineMySQL, '?useUnicode=true&amp;characterEncoding=UTF8&amp;sessionVariables=default_storage_engine=InnoDB', '?targetServerType=master']
                     - !Sub ["ATL_JIRA_FULL_DISPLAY_NAME=${JiraFullDisplayName}", JiraFullDisplayName: !FindInMap [ "JIRAProduct2NameAndVersion", !Ref JiraProduct, "fulldisplayname"]]
                     - !Sub ["ATL_JIRA_NAME=${JiraProductName}", JiraProductName: !FindInMap [ "JIRAProduct2NameAndVersion", !Ref JiraProduct, "name"]]
                     - !Sub ["ATL_JIRA_SHORT_DISPLAY_NAME=${JiraShortDisplayName}", JiraShortDisplayName: !FindInMap [ "JIRAProduct2NameAndVersion", !Ref JiraProduct, "shortdisplayname"]]

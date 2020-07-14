@@ -1,0 +1,52 @@
+[
+  {
+    "ParameterKey": "InternetFacingLoadBalancer",
+    "ParameterValue": "true"
+  },
+  {
+    "ParameterKey": "DBMasterUserPassword",
+    "ParameterValue": "f925dO1ry_"
+  },
+  {
+    "ParameterKey": "DBPassword",
+    "ParameterValue": "f925dO1ry_"
+  },
+  {
+    "ParameterKey": "QSS3BucketName",
+    "ParameterValue": "$[taskcat_autobucket]"
+  },
+  {
+    "ParameterKey": "QSS3KeyPrefix",
+    "ParameterValue": "quickstart-atlassian-jira/"
+  },
+  {
+    "ParameterKey": "CidrBlock",
+    "ParameterValue": "0.0.0.0/0"
+  },
+  {
+    "ParameterKey": "KeyPairName",
+    "ParameterValue": "replaced-by-taskcat-override-file"
+  },
+  {
+    "ParameterKey": "DBEngine",
+    "ParameterValue": "MySQL"
+  },{
+    "ParameterKey": "DBMultiAZ",
+    "ParameterValue": "false"
+  },
+  {
+    "ParameterKey": "DBEngineVersion",
+    "ParameterValue": "5.7"
+  },
+  {
+    "ParameterKey": "DBInstanceClass",
+    "ParameterValue": "db.t3.medium"
+  },{
+    "ParameterKey": "DeploymentAutomationBranch",
+    "ParameterValue": "inno-add-mysql"
+  },
+  {
+    "ParameterKey": "ClusterNodeInstanceType",
+    "ParameterValue": "t3.medium"
+  }
+]
