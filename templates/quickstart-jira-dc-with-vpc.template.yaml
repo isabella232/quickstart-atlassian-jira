@@ -37,24 +37,24 @@ Metadata:
           - DBMultiAZ
           - DBPassword
           - DBStorage
-          - DBStorageEncrypted
           - DBStorageType
       - Label:
-          default: Bastion host provisioning
+          default: Security
         Parameters:
+          - AccessCIDR
+          - EncryptionAtRest
+          - SSLCertificateARN
           - BastionHostRequired
           - KeyPairName
       - Label:
           default: Networking
         Parameters:
-          - AccessCIDR
           - AvailabilityZones
           - InternetFacingLoadBalancer
           - PrivateSubnet1CIDR
           - PrivateSubnet2CIDR
           - PublicSubnet1CIDR
           - PublicSubnet2CIDR
-          - SSLCertificateARN
           - VPCCIDR
       - Label:
           default: DNS (Optional)
@@ -144,8 +144,6 @@ Metadata:
         default: DB Remove Abandoned Timeout
       DBStorage:
         default: Database storage
-      DBStorageEncrypted:
-        default: Database encryption
       DBStorageType:
         default: Database storage type
       DBTestOnBorrow:
@@ -164,6 +162,8 @@ Metadata:
         default: SSH keyname to use with the repository
       DeploymentAutomationCustomParams:
         default: Custom command-line parameters for Ansible
+      EncryptionAtRest:
+        default: Database and filesystem encryption
       ExportPrefix:
         default: ASI identifier
       HostedZone:
@@ -467,13 +467,6 @@ Parameters:
     Default: 200
     Description: Database allocated storage size, in gigabytes (GB). If you choose Provisioned IOPS, storage should be between 100 and 6144 (not used for Aurora).
     Type: Number
-  DBStorageEncrypted:
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: Whether or not to encrypt the database
-    Type: String
   DBStorageType:
     Default: General Purpose (SSD)
     AllowedValues:
@@ -520,6 +513,13 @@ Parameters:
     Default: ""
     Type: String
     Description: Named Key Pair name to use with this repository. The key should be imported into the SSM parameter store. (Optional)
+  EncryptionAtRest:
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Whether or not to encrypt the database and filesystems
+    Type: String
   ExportPrefix:
     Default: 'ATL-'
     Description:
@@ -673,8 +673,8 @@ Parameters:
     Type: String
 
 Conditions:
-  UseDatabaseEncryption:
-    !Equals [!Ref DBStorageEncrypted, true]
+  UseEncryption:
+    !Equals [!Ref EncryptionAtRest, true]
   GovCloudCondition:
     !Equals [!Ref 'AWS::Region', 'us-gov-west-1']
   KeyProvided:
@@ -739,7 +739,6 @@ Resources:
         DBRemoveAbandoned: !Ref 'DBRemoveAbandoned'
         DBRemoveAbandonedTimeout: !Ref 'DBRemoveAbandonedTimeout'
         DBStorage: !Ref 'DBStorage'
-        DBStorageEncrypted: !Ref 'DBStorageEncrypted'
         DBStorageType: !Ref 'DBStorageType'
         DBTestOnBorrow: !Ref 'DBTestOnBorrow'
         DBTestWhileIdle: !Ref 'DBTestWhileIdle'
@@ -749,6 +748,7 @@ Resources:
         DeploymentAutomationKeyName: !Ref 'DeploymentAutomationKeyName'
         DeploymentAutomationPlaybook: !Ref 'DeploymentAutomationPlaybook'
         DeploymentAutomationCustomParams: !Ref 'DeploymentAutomationCustomParams'
+        EncryptionAtRest: !Ref 'EncryptionAtRest'
         ExportPrefix: !Ref 'ExportPrefix'
         HostedZone: !Ref 'HostedZone'
         InternetFacingLoadBalancer: !Ref 'InternetFacingLoadBalancer'
@@ -787,10 +787,10 @@ Outputs:
   DBEndpointAddress:
     Description: The Database Connection String
     Value: !GetAtt 'JiraDCStack.Outputs.DBEndpointAddress'
-  DBEncryptionKey:
-    Condition: UseDatabaseEncryption
-    Description: The alias of the encryption key created for RDS
-    Value: !GetAtt 'JiraDCStack.Outputs.DBEncryptionKey'
+  EncryptionKey:
+    Condition: UseEncryption
+    Description: The alias of the encryption key created for RDS and EFS
+    Value: !GetAtt 'JiraDCStack.Outputs.EncryptionKey'
   EFSCname:
     Description: The cname of the EFS
     Value: !GetAtt 'JiraDCStack.Outputs.EFSCname'

@@ -1,0 +1,17 @@
+---
+global:
+  marketplace-ami: false
+  owner: dc-deployments-syd@atlassian.com
+  qsname: quickstart-atlassian-jira
+  regions:
+    - ap-southeast-2
+  reporting: true
+
+tests:
+  jira-encrypted:
+    parameter_input: params/encryption/quickstart-jira-encryption-params.json
+    template_file: quickstart-jira-dc.template.yaml
+  
+  jira-not-encrypted:
+    parameter_input: params/encryption/quickstart-jira-no-encryption-params.json
+    template_file: quickstart-jira-dc.template.yaml
