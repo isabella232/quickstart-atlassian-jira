@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-Description: Atlassian Jira Data Center QS(0035)
+Description: 'Atlassian Jira Data Center. (qs-1qup6ra3c)'
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -12,13 +12,21 @@ Metadata:
       - Label:
           default: Cluster nodes
         Parameters:
+          - CloudWatchIntegration
           - ClusterNodeInstanceType
           - ClusterNodeMax
           - ClusterNodeMin
           - ClusterNodeVolumeSize
+          - DeploymentAutomationRepository
+          - DeploymentAutomationBranch
+          - DeploymentAutomationPlaybook
+          - DeploymentAutomationCustomParams
+          - DeploymentAutomationKeyName
       - Label:
           default: Database
         Parameters:
+          - DBEngine
+          - DBEngineVersion
           - DBInstanceClass
           - DBIops
           - DBMasterUserPassword
@@ -28,11 +36,15 @@ Metadata:
           - DBStorageEncrypted
           - DBStorageType
       - Label:
+          default: Bastion host utilization
+        Parameters:
+          - BastionHostRequired
+          - KeyPairName
+      - Label:
           default: Networking
         Parameters:
           - InternetFacingLoadBalancer
           - CidrBlock
-          - KeyPairName
           - SSLCertificateARN
       - Label:
           default: DNS (Optional)
@@ -40,14 +52,7 @@ Metadata:
           - CustomDnsName
           - HostedZone
       - Label:
-          default: Cluster Node Deployment Repository; this is used to install and configure the application.
-        Parameters:
-          - DeploymentAutomationRepository
-          - DeploymentAutomationBranch
-          - DeploymentAutomationPlaybook
-          - DeploymentAutomationKeyName
-      - Label:
-          default: Application Tuning (Optional) - dbref - https://confluence.atlassian.com/display/AdminJIRAServer/Tuning+database+connections tomcatref - http://tomcat.apache.org/tomcat-7.0-doc/config/http.html
+          default: Application Tuning (Optional)
         Parameters:
           - TomcatContextPath
           - CatalinaOpts
@@ -72,13 +77,20 @@ Metadata:
           - TomcatMinSpareThreads
           - TomcatProtocol
           - TomcatRedirectPort
-          - TomcatScheme
+      - Label:
+          default: AWS Quick Start Configuration
+        Parameters:
+          - QSS3BucketName
+          - QSS3KeyPrefix
+          - ExportPrefix
 
     ParameterLabels:
       CatalinaOpts:
         default: Catalina options
       CidrBlock:
         default: Permitted IP range
+      CloudWatchIntegration:
+        default: Enable CloudWatch integration
       ClusterNodeMax:
         default: Maximum number of cluster nodes
       ClusterNodeMin:
@@ -88,7 +100,11 @@ Metadata:
       ClusterNodeVolumeSize:
         default: Cluster node instance volume size
       CustomDnsName:
-        default: Existing DNS name (optional)
+        default: Existing DNS name
+      DBEngine:
+        default: The database engine to deploy with
+      DBEngineVersion:
+        default: The database engine version to use
       DBInstanceClass:
         default: Database instance class
       DBIops:
@@ -132,11 +148,15 @@ Metadata:
       DeploymentAutomationBranch:
         default: Deployment Automation Branch
       DeploymentAutomationPlaybook:
-        default: The Ansible playbook to invoke to initialise the instance.
+        default: The Ansible playbook to invoke to initialize the instance
       DeploymentAutomationKeyName:
-        default: SSH keyname to use with the repository (Optional)
+        default: SSH keyname to use with the repository
+      DeploymentAutomationCustomParams:
+        default: Custom command-line parameters for Ansible
+      ExportPrefix:
+        default: ASI identifier
       HostedZone:
-        default: Route 53 Hosted Zone (optional)
+        default: Route 53 Hosted Zone
       InternetFacingLoadBalancer:
         default: Make instance internet facing
       JiraProduct:
@@ -145,8 +165,10 @@ Metadata:
         default: Version *
       JvmHeapOverride:
         default: JVM Heap Size Override
+      BastionHostRequired:
+        default: Use Bastion host
       KeyPairName:
-        default: Key Name *
+        default: SSH Key Pair Name
       MailEnabled:
         default: Enable App to Process Email
       SSLCertificateARN:
@@ -169,8 +191,10 @@ Metadata:
         default: Tomcat Protocol
       TomcatRedirectPort:
         default: Tomcat Redirect Port
-      TomcatScheme:
-        default: Tomcat protocol Scheme
+      QSS3BucketName:
+        default: Quick Start S3 Bucket Name
+      QSS3KeyPrefix:
+        default: Quick Start S3 Key Prefix
 
 Parameters:
   CatalinaOpts:
@@ -184,6 +208,12 @@ Parameters:
     Type: String
     MinLength: 9
     MaxLength: 18
+  CloudWatchIntegration:
+    Default: "Metrics and Logs"
+    Type: String
+    Description: "Enables CloudWatch metrics with or without log gathering. If cost is an issue, you can disable this altogether."
+    AllowedValues: ["Off", "Metrics Only", "Metrics and Logs"]
+    ConstraintDescription: "Must be 'Off', 'Metrics Only', or 'Metrics and Logs'"
   ClusterNodeInstanceType:
     Default: c5.xlarge
     AllowedValues:
@@ -296,39 +326,73 @@ Parameters:
     Default: ""
     Description: 'Use custom existing DNS name for your Data Center instance. This will take precedence over HostedZone. Please note: you must own the domain and configure it to point at the load balancer.'
     Type: String
-  DBInstanceClass:
-    Default: db.m4.large
+  DBEngine:
+    Default: 'PostgreSQL'
+    Description: 'Database Engine to use for the application. PostgreSQL or Amazon Aurora PostgreSQL'
     AllowedValues:
-      - db.m4.large
-      - db.m4.xlarge
-      - db.m4.2xlarge
-      - db.m4.4xlarge
-      - db.m4.10xlarge
-      - db.m4.16xlarge
+      - 'PostgreSQL'
+      - 'Amazon Aurora PostgreSQL'
+    ConstraintDescription: Must be 'Amazon Aurora PostgreSQL' or 'PostgreSQL'.
+    Type: String
+  DBEngineVersion:
+    Default: 9
+    AllowedValues:
+      - 9
+      - 10
+      - 11
+    Description: "The database engine version to use; we'll install a suitable minor version for your chosen engine. Make sure that the Jira version you're installing supports the database engine selected. Check https://confluence.atlassian.com/x/bqr1Nw to verify this."
+    Type: String
+  DBInstanceClass:
+    Default: db.m5.large
+    AllowedValues:
+      - db.m5.large
+      - db.m5.xlarge
+      - db.m5.2xlarge
+      - db.m5.4xlarge
+      - db.m5.12xlarge
+      - db.m5.24xlarge
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r5.12xlarge
+      - db.r5.24xlarge
       - db.r4.large
       - db.r4.xlarge
       - db.r4.2xlarge
       - db.r4.4xlarge
       - db.r4.8xlarge
       - db.r4.16xlarge
+      - db.m4.large
+      - db.m4.xlarge
+      - db.m4.2xlarge
+      - db.m4.4xlarge
+      - db.m4.10xlarge
+      - db.m4.16xlarge
+      - db.t3.medium
+      - db.t3.large
+      - db.t3.xlarge
+      - db.t3.2xlarge
       - db.t2.medium
       - db.t2.large
       - db.t2.xlarge
       - db.t2.2xlarge
     ConstraintDescription: Must be a valid RDS instance class, from the selection list
-    Description: RDS instance type
+    Description: RDS instance type (must be r family if using Aurora).
     Type: String
   DBIops:
     Default: 1000
     ConstraintDescription: 'Must be in the range 1000 - 30000'
-    Description: 'Must be in the range of 1000 - 30000 and a multiple of 1000. This value is only used with Provisioned IOPS. Note: The ratio of IOPS per allocated-storage must be between 3.00 and 10.00'
+    Description: 'Must be in the range of 1000 - 30000 and a multiple of 1000. This value is only used with Provisioned IOPS. Note: The ratio of IOPS per allocated-storage must be between 3.00 and 10.00 (not used for Aurora).'
     MaxValue: 30000
     MinValue: 1000
     Type: Number
   DBMasterUserPassword:
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must be at least 8 alphanumeric characters.
-    Description: Database admin account password.
+    AllowedPattern: >-
+      ^(?=^.{8,255}$)(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])(?!.*[@/"']).*$
+    ConstraintDescription: >-
+      Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ + % &
+    Description: "Password for the master ('postgres') account. Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ + % &"
     NoEcho: True
     MaxLength: 128
     MinLength: 8
@@ -336,31 +400,31 @@ Parameters:
   DBMaxIdle:
     Default: 20
     Description: The maximum number of database connections that are allowed to remain idle in the pool
-    Type: String
+    Type: Number
   DBMaxWaitMillis:
     Default: 10000
     Description: The length of time (in milliseconds) that Jira is allowed to wait for a database connection to become available (while there are no free ones available in the pool), before returning an error
-    Type: String
+    Type: Number
   DBMinEvictableIdleTimeMillis:
     Default: 180000
     Description: The minimum amount of time an object may sit idle in the database connection pool before it is eligible for eviction by the idle object eviction
-    Type: String
+    Type: Number
   DBMinIdle:
     Default: 10
     Description: The minimum number of idle database connections that are kept open at any time
-    Type: String
+    Type: Number
   DBMultiAZ:
     Description: Whether to provision a multi-AZ RDS instance.
-    Default: true
+    Default: "true"
     AllowedValues:
-      - true
-      - false
+      - "true"
+      - "false"
     ConstraintDescription: Must be 'true' or 'false'.
     Type: String
   DBPassword:
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must be at least 8 alphanumeric characters.
-    Description: Database user account password.
+    AllowedPattern: '(?=^.{6,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
+    ConstraintDescription: 'Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ @ + % &'
+    Description: "Database password used by Jira. Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ @ + % &"
     MinLength: 8
     MaxLength: 128
     NoEcho: true
@@ -368,28 +432,31 @@ Parameters:
   DBPoolMaxSize:
     Default: 20
     Description: The maximum number of database connections that can be opened at any time
-    Type: String
+    Type: Number
   DBPoolMinSize:
     Default: 20
     Description: The minimum number of idle database connections that are kept open at any time
-    Type: String
+    Type: Number
   DBRemoveAbandoned:
-    Default: true
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
     Description: Flag to remove abandoned database connections if they exceed the Removed Abandoned Timeout
     Type: String
   DBRemoveAbandonedTimeout:
     Default: 60
     Description: The length of time (in seconds) that a database connection can be idle before it is considered abandoned
-    Type: String
+    Type: Number
   DBStorage:
     Default: 200
-    Description: Database allocated storage size, in gigabytes (GB)
+    Description: Database allocated storage size, in gigabytes (GB). If you choose Provisioned IOPS, storage should be between 100 and 6144 (not used for Aurora).
     Type: Number
   DBStorageEncrypted:
-    Default: false
+    Default: "false"
     AllowedValues:
-      - true
-      - false
+      - "true"
+      - "false"
     Description: Whether or not to encrypt the database
     Type: String
   DBStorageType:
@@ -398,24 +465,30 @@ Parameters:
       - General Purpose (SSD)
       - Provisioned IOPS
     ConstraintDescription: Must be 'General Purpose (SSD)' or 'Provisioned IOPS'.
-    Description: Database storage type
+    Description: Database storage type (not used for Aurora).
     Type: String
   DBTestOnBorrow:
-    Default: false
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
     Description: Tests if the database connection is valid when it is borrowed from the database connection pool by Jira
     Type: String
   DBTestWhileIdle:
-    Default: true
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
     Description: Periodically tests if the database connection is valid when it is idle
     Type: String
   DBTimeBetweenEvictionRunsMillis:
     Default: 60000
     Description: The number of milliseconds to sleep between runs of the idle object eviction thread. When non-positive, no idle object eviction thread will be run
-    Type: String
+    Type: Number
   DeploymentAutomationRepository:
     Default: "https://bitbucket.org/atlassian/dc-deployments-automation.git"
     Type: String
-    Description: The deployment automation repository to use for per-node initialisation. Leave this as default unless you have customisations.
+    Description: The deployment automation repository to use for per-node initialization. Leave this as default unless you have customizations.
   DeploymentAutomationBranch:
     Default: "master"
     Type: String
@@ -423,19 +496,28 @@ Parameters:
   DeploymentAutomationPlaybook:
     Default: "aws_jira_dc_node.yml"
     Type: String
-    Description: The Ansible playbook to invoke to initialise the Jira node on first start.
+    Description: The Ansible playbook to invoke to initialize the Jira node on first start.
+  DeploymentAutomationCustomParams:
+    Default: ""
+    Type: String
+    Description: Additional command-line options for the `ansible-playbook` command. See https://bitbucket.org/atlassian/dc-deployments-automation/src/master/README.md for more information about overriding parameters. (Optional)
   DeploymentAutomationKeyName:
     Default: ""
     Type: String
-    Description: Named KeyPair name to use with this repository. The key should be imported into the SSM parameter store. (Optional)
+    Description: Named Key Pair name to use with this repository. The key should be imported into the SSM parameter store. (Optional)
+  ExportPrefix:
+    Default: 'ATL-'
+    Description:
+      Each Atlassian Standard Infrastructure (ASI) uses a unique identifier. If you have multiple ASIs within the same AWS region, use this field to specify where to deploy Jira.
+    Type: String
   HostedZone:
     Default: ''
     ConstraintDescription: Must be the name of an existing Route53 Hosted Zone.
     Description: The domain name of the Route53 PRIVATE Hosted Zone in which to create cnames
     Type: String
   InternetFacingLoadBalancer:
-    Default: true
-    AllowedValues: [true, false]
+    Default: "true"
+    AllowedValues: ["true", "false"]
     ConstraintDescription: Must be 'true' or 'false'.
     Description: Controls whether the load balancer should be visible to the internet (true) or only within the VPC (false).
     Type: String
@@ -449,7 +531,7 @@ Parameters:
       - Software
       - ServiceDesk
   JiraVersion:
-    Default: 7.13.3
+    Default: "8.5.6"
     AllowedPattern: '(\d+\.\d+\.\d+(-?.*))|(latest)'
     ConstraintDescription: Must be a valid version number or 'latest'; for example, 8.1.0 for Jira Software, or 4.1.0 for ServiceDesk.
     Description: The version of Jira Software or Jira Service Desk to install. Find valid versions at https://confluence.atlassian.com/x/TVlNLg (Jira Software), https://confluence.atlassian.com/x/jh9-Lg (Jira Service Desk), or https://confluence.atlassian.com/x/XM2EO (Atlassian Enterprise Releases).
@@ -458,33 +540,40 @@ Parameters:
     Default: ''
     Description: Override the default amount of memory to allocate to the JVM for your instance type - set size in meg or gig e.g. 1024m or 1g
     Type: String
-  KeyPairName:
-    Default: ''
-    ConstraintDescription: Must be the name of an existing EC2 Key Pair.
-    Description: The EC2 Key Pair to allow SSH access to the instances
+  BastionHostRequired:
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Whether to grant access to Jira EC2 instances through the ASI's Bastion host (if it exists). If 'true', remember to provide an EC2 Key Pair. If your ASI does not have a Bastion host, set this to 'false'.
     Type: String
+  KeyPairName:
+    ConstraintDescription: Must be the name of an existing EC2 Key Pair.
+    Description: Public/private EC2 Key Pairs to allow you to securely access the Bastion host
+    Type: String
+    Default: ''
   MailEnabled:
     AllowedValues:
-      - true
-      - false
+      - "true"
+      - "false"
     ConstraintDescription: Must be 'true' or 'false'.
-    Default: true
+    Default: "true"
     Description: Enable mail processing and sending
     Type: String
   SSLCertificateARN:
     Default: ''
-    Description: "Amazon Resource Name (ARN) of your SSL certificate. Every certificate created with the AWS Certificate Manager has a corresponding ARN. To use a certificate generated outside of AWS, you need to import it into AWS Certificate Manager first. AWS Certificate Manager will provide you with its ARN, which you can use here."
+    Description: "Amazon Resource Name (ARN) of your SSL certificate. Supplying this will automatically enable HTTPS on the product and load balancer, configured to use the corresponding certificate. If you want to use your own certificate that you generated outside of Amazon, you need to first import it to AWS Certificate Manager. After a successful import, you'll receive the ARN. If you want to create a certificate with AWS Certificate Manager (ACM certificate), you will receive the ARN after it's successfully created."
     MinLength: 0
     MaxLength: 90
     Type: String
   TomcatAcceptCount:
     Default: 10
     Description: The maximum queue length for incoming connection requests when all possible request processing threads are in use
-    Type: String
+    Type: Number
   TomcatConnectionTimeout:
     Default: 20000
     Description: The number of milliseconds this Connector will wait, after accepting a connection, for the request URI line to be presented
-    Type: String
+    Type: Number
   TomcatContextPath:
     Default: ''
     AllowedPattern: '^(\/[A-z_\-0-9\.]+)?$'
@@ -493,19 +582,22 @@ Parameters:
   TomcatDefaultConnectorPort:
     Default: 8080
     Description: The port on which to serve the application
-    Type: String
+    Type: Number
   TomcatEnableLookups:
-    Default: false
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
     Description: Set to true if you want calls to request.getRemoteHost() to perform DNS lookups in order to return the actual host name of the remote client
     Type: String
   TomcatMaxThreads:
     Default: 200
     Description: The maximum number of request processing threads to be created by this Connector, which therefore determines the maximum number of simultaneous requests that can be handled
-    Type: String
+    Type: Number
   TomcatMinSpareThreads:
     Default: 10
     Description: The minimum number of threads always kept running
-    Type: String
+    Type: Number
   TomcatProtocol:
     Default: 'HTTP/1.1'
     Description: Sets the protocol to handle incoming traffic
@@ -513,25 +605,38 @@ Parameters:
   TomcatRedirectPort:
     Default: 8443
     Description: The port number for Catalina to use when automatically redirecting a non-SSL connector actioning a redirect to a SSL URI
+    Type: Number
+  QSS3BucketName:
+    Default: 'aws-quickstart'
+    AllowedPattern: ^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$
+    ConstraintDescription: Quick Start bucket name can include numbers, lowercase
+      letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen
+      (-).
+    Description: S3 bucket name for the Quick Start assets. Quick Start bucket name
+      can include numbers, lowercase letters, uppercase letters, and hyphens (-).
+      It cannot start or end with a hyphen (-).
     Type: String
-  TomcatScheme:
-    Default: http
-    Description: "The name of the protocol you wish to have returned, ie 'https' for an SSL Connector. The value of this setting also configures Tomcat's proxy port (443/80) and secure (true/false) settings appropriately."
+  QSS3KeyPrefix:
+    Default: 'quickstart-atlassian-jira/'
+    AllowedPattern: ^[0-9a-zA-Z-/]*$
+    ConstraintDescription: Quick Start key prefix can include numbers, lowercase letters,
+      uppercase letters, hyphens (-), and forward slash (/).
+    Description: S3 key prefix for the Quick Start assets. Quick Start key prefix
+      can include numbers, lowercase letters, uppercase letters, hyphens (-), and
+      forward slash (/).
     Type: String
-    AllowedValues: [http, https]
+
 Conditions:
-  DBProvisionedIops:
-    !Equals [!Ref DBStorageType, Provisioned IOPS]
   DisableMail:
     !Not [!Equals [!Ref MailEnabled, true]]
-  DoSetDBMasterUserPassword:
-    !Not [!Equals [!Ref DBMasterUserPassword, '']]
+  EnableCloudWatch:
+    !Not [!Equals [!Ref CloudWatchIntegration, 'Off']]
+  EnableCloudWatchLogs:
+    !Equals [!Ref CloudWatchIntegration, 'Metrics and Logs']
   DoSSL:
     !Not [!Equals [!Ref SSLCertificateARN, '']]
   KeyProvided:
     !Not [!Equals [!Ref KeyPairName, '']]
-  SSLScheme:
-    !Equals [!Ref TomcatScheme, 'https']
   OverrideHeap:
     !Not [!Equals [!Ref JvmHeapOverride, '']]
   UseContextPath:
@@ -544,8 +649,20 @@ Conditions:
     !Not [!Equals [!Ref HostedZone, '']]
   UsePublicIp:
     !Equals [!Ref InternetFacingLoadBalancer, 'true']
+  GovCloudCondition:
+    !Equals [!Ref 'AWS::Region', 'us-gov-west-1']
+  DBEngineAurora:
+    !Equals [!Ref DBEngine, "Amazon Aurora PostgreSQL"]
+  DBEnginePostgres:
+    !Equals [!Ref DBEngine, "PostgreSQL"]
+  UseBastionHost: !And
+    - !Equals [!Ref BastionHostRequired, true]
+    - !Condition KeyProvided
 Mappings:
   AWSInstanceType2Arch:
+    c4.large:
+      Arch: HVM64
+      Jvmheap: 2304m
     c4.xlarge:
       Arch: HVM64
       Jvmheap: 4608m
@@ -817,52 +934,40 @@ Mappings:
   AWSRegionArch2AMI:
     ap-northeast-1:
       HVM64: ami-00d101850e971728d
-      HVMG2: NOT_SUPPORTED
     ap-northeast-2:
       HVM64: ami-08ab3f7e72215fe91
-      HVMG2: NOT_SUPPORTED
     ap-south-1:
       HVM64: ami-00e782930f1c3dbc7
-      HVMG2: NOT_SUPPORTED
     ap-southeast-1:
       HVM64: ami-0b5a47f8865280111
-      HVMG2: NOT_SUPPORTED
     ap-southeast-2:
       HVM64: ami-0fb7513bcdc525c3b
-      HVMG2: NOT_SUPPORTED
     ca-central-1:
       HVM64: ami-08a9b721ecc5b0a53
-      HVMG2: NOT_SUPPORTED
     eu-central-1:
       HVM64: ami-0ebe657bc328d4e82
-      HVMG2: NOT_SUPPORTED
     eu-north-1:
       HVM64: ami-1fb13961
-      HVMG2: NOT_SUPPORTED
     eu-west-1:
       HVM64: ami-030dbca661d402413
-      HVMG2: NOT_SUPPORTED
     eu-west-2:
       HVM64: ami-0009a33f033d8b7b6
-      HVMG2: NOT_SUPPORTED
     eu-west-3:
       HVM64: ami-0ebb3a801d5fb8b9b
-      HVMG2: NOT_SUPPORTED
     sa-east-1:
       HVM64: ami-058141e091292ecf0
-      HVMG2: NOT_SUPPORTED
     us-east-1:
       HVM64: ami-0c6b1d09930fac512
-      HVMG2: NOT_SUPPORTED
     us-east-2:
       HVM64: ami-0ebbf2179e615c338
-      HVMG2: NOT_SUPPORTED
     us-west-1:
       HVM64: ami-015954d5e5548d13b
-      HVMG2: NOT_SUPPORTED
     us-west-2:
       HVM64: ami-0cb72367e98845d43
-      HVMG2: NOT_SUPPORTED
+    us-gov-west-1:
+      HVM64: ami-e9a9d388
+    us-gov-east-1:
+      HVM64: ami-a2d938d3
 
   JIRAProduct2NameAndVersion:
     Core:
@@ -889,7 +994,8 @@ Resources:
               Service: [ec2.amazonaws.com]
             Action: ['sts:AssumeRole']
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/CloudWatchAgentServerPolicy'
       Path: /
       Policies:
         - PolicyName: JiraClusterNodePolicy
@@ -897,25 +1003,38 @@ Resources:
             Version: 2012-10-17
             Statement:
               - Action:
-                - 'ec2:DescribeInstances'
-                - 'route53:ListHostedZones'
-                - 'route53:ListResourceRecordSet'
+                  - 'autoscaling:DescribeTags'
+                  - 'autoscaling:CreateOrUpdateTags'
+                  - 'ec2:CreateTags'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeTags'
+                  - 'route53:ListHostedZones'
+                  - 'route53:ListResourceRecordSet'
                 Effect: Allow
                 Resource: ['*']
               - Action:
-                - "route53:ChangeResourceRecordSets"
+                  - "route53:ChangeResourceRecordSets"
                 Effect: Allow
                 Resource:
-                  - "arn:aws:route53:::healthcheck/*"
-                  - "arn:aws:route53:::change/*"
-                  - "arn:aws:route53:::hostedzone/*"
-                  - "arn:aws:route53:::delegationset/*"
+                  - !Sub 'arn:${AWS::Partition}:route53:::healthcheck/*'
+                  - !Sub 'arn:${AWS::Partition}:route53:::healthcheck/*'
+                  - !Sub 'arn:${AWS::Partition}:route53:::change/*'
+                  - !Sub 'arn:${AWS::Partition}:route53:::hostedzone/*'
+                  - !Sub 'arn:${AWS::Partition}:route53:::delegationset/*'
+        - PolicyName: SSMParameterPutAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 'ssm:PutParameter'
+                Effect: Allow
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/pinned-ansible-sha"
   JiraClusterNodeInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: /
       Roles: [!Ref JiraClusterNodeRole]
-# Jira node config
+  # Jira node config
   ClusterNodeGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -923,15 +1042,23 @@ Resources:
       LaunchConfigurationName: !Ref ClusterNodeLaunchConfig
       MaxSize: !Ref ClusterNodeMax
       MinSize: !Ref ClusterNodeMin
-      LoadBalancerNames:
-        - !Ref LoadBalancer
-      VPCZoneIdentifier: !Split [ ",", !ImportValue ATL-PriNets]
+      TargetGroupARNs: [!Ref MainTargetGroup]
+      VPCZoneIdentifier: !Split
+        - ","
+        - Fn::ImportValue: !Sub "${ExportPrefix}PriNets"
       Tags:
         - Key: Name
-          Value: !Sub ["${StackName} Jira Node", StackName: !Ref 'AWS::StackName']
+          Value: !Sub ["${StackName} Jira Node", {StackName: !Ref 'AWS::StackName'}]
           PropagateAtLaunch: true
         - Key: Cluster
           Value: !Ref AWS::StackName
+          PropagateAtLaunch: true
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: 967bce1c42a0ed818fae85170cc73cd53740220f"
+          PropagateAtLaunch: true
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 2020-08-18T11:21:04Z"
           PropagateAtLaunch: true
 
   ClusterNodeLaunchConfig:
@@ -939,7 +1066,7 @@ Resources:
     DependsOn:
       - EFSMountAz1
       - EFSMountAz2
-      - DB
+      - AnsibleRepoPinSHA
     Metadata:
       Comment: ''
       AWS::CloudFormation::Init:
@@ -952,11 +1079,11 @@ Resources:
               content:
                 'Fn::Join':
                   - "\n"
-                  -
-                    - "ATL_PRODUCT_FAMILY=jira"
+                  - - "ATL_PRODUCT_FAMILY=jira"
                     - "ATL_DB_DRIVER=org.postgresql.Driver"
                     - "ATL_JDBC_DB_NAME=jira"
                     - "ATL_JDBC_USER=atljira"
+                    - "ATL_JVM_OPTS='-XX:+ExplicitGCInvokesConcurrent -XX:ReservedCodeCacheSize=512M'"
                     - "ATL_APP_DATA_MOUNT_ENABLED=false"
                     - "ATL_ENABLED_PRODUCTS=Jira"
                     - "ATL_ENABLED_SHARED_HOMES="
@@ -969,10 +1096,11 @@ Resources:
                     - !Sub ["ATL_PRODUCT_EDITION=${Edition}", Edition: !Ref "JiraProduct"]
                     - !Sub ["ATL_PRODUCT_VERSION=${ProductVersion}", ProductVersion: !Ref JiraVersion]
                     - !Sub ["ATL_EFS_ID=${ElasticFileSystem}", ElasticFileSystem: !Ref "ElasticFileSystem"]
-                    - !If [SSLScheme, "ATL_SSL_PROXY=true", !Ref "AWS::NoValue"]
+                    - !If [DoSSL, "ATL_SSL_PROXY=true", !Ref "AWS::NoValue"]
                     - !Sub ["ATL_AWS_STACK_NAME=${StackName}", StackName: !Ref "AWS::StackName"]
                     - !Sub ["ATL_CATALINA_OPTS=\"${CatalinaOpts} ${MailOpts}\"", { CatalinaOpts: !Ref CatalinaOpts, MailOpts: !If [DisableMail, '-Datlassian.mail.senddisabled=true -Datlassian.mail.fetchdisabled=true -Datlassian.mail.popdisabled=true', ''] }]
-                    - !Sub ["ATL_DB_HOST=${DBEndpointAddress}", DBEndpointAddress: !GetAtt DB.Endpoint.Address]
+                    - !Sub ["ATL_DB_ENGINE=${DBEngine}", DBEngine: !If [DBEngineAurora, aurora_postgres, !If [DBEnginePostgres, rds_postgres, '']]]
+                    - !Sub ["ATL_DB_HOST=${DBEndpointAddress}", DBEndpointAddress: !GetAtt DB.Outputs.RDSEndPointAddress]
                     - !Sub ["ATL_DB_MAXIDLE=${DBMaxIdle}", DBMaxIdle: !Ref DBMaxIdle]
                     - !Sub ["ATL_DB_MAXWAITMILLIS=${DBMaxWaitMillis}", DBMaxWaitMillis: !Ref DBMaxWaitMillis]
                     - !Sub ["ATL_DB_MINEVICTABLEIDLETIMEMILLIS=${DBMinEvictableIdleTimeMillis}", DBMinEvictableIdleTimeMillis: !Ref DBMinEvictableIdleTimeMillis]
@@ -980,7 +1108,7 @@ Resources:
                     - !Sub ["ATL_DB_ROOT_PASSWORD='${DBMasterUserPassword}'", DBMasterUserPassword: !Ref DBMasterUserPassword]
                     - !Sub ["ATL_DB_POOLMAXSIZE=${DBPoolMaxSize}", DBPoolMaxSize: !Ref DBPoolMaxSize]
                     - !Sub ["ATL_DB_POOLMINSIZE=${DBPoolMinSize}", DBPoolMinSize: !Ref DBPoolMinSize]
-                    - !Sub ["ATL_DB_PORT=${DBEndpointPort}", DBEndpointPort: !GetAtt DB.Endpoint.Port]
+                    - !Sub ["ATL_DB_PORT=${DBEndpointPort}", DBEndpointPort: !GetAtt DB.Outputs.RDSEndPointPort]
                     - !Sub ["ATL_DB_REMOVEABANDONED=${DBRemoveAbandoned}", DBRemoveAbandoned: !Ref DBRemoveAbandoned]
                     - !Sub ["ATL_DB_REMOVEABANDONEDTIMEOUT=${DBRemoveAbandonedTimeout}", DBRemoveAbandonedTimeout: !Ref DBRemoveAbandonedTimeout]
                     - !Sub ["ATL_DB_TESTONBORROW=${DBTestOnBorrow}", DBTestOnBorrow: !Ref DBTestOnBorrow]
@@ -988,7 +1116,7 @@ Resources:
                     - !Sub ["ATL_DB_TIMEBETWEENEVICTIONRUNSMILLIS=${DBTimeBetweenEvictionRunsMillis}", DBTimeBetweenEvictionRunsMillis: !Ref DBTimeBetweenEvictionRunsMillis]
                     - !Sub ["ATL_HOSTEDZONE=${HostedZone}", HostedZone: !Ref HostedZone]
                     - !Sub ["ATL_JDBC_PASSWORD='${DBPassword}'", DBPassword: !Ref DBPassword]
-                    - !Sub ["ATL_JDBC_URL=jdbc:postgresql://${DBEndpointAddress}:${DBEndpointPort}/jira", { DBEndpointAddress: !GetAtt DB.Endpoint.Address, DBEndpointPort: !GetAtt DB.Endpoint.Port }]
+                    - !Sub ["ATL_JDBC_URL=jdbc:postgresql://${DBEndpointAddress}:${DBEndpointPort}/jira?targetServerType=master", { DBEndpointAddress: !GetAtt DB.Outputs.RDSEndPointAddress, DBEndpointPort: !GetAtt DB.Outputs.RDSEndPointPort }]
                     - !Sub ["ATL_JIRA_FULL_DISPLAY_NAME=${JiraFullDisplayName}", JiraFullDisplayName: !FindInMap [ "JIRAProduct2NameAndVersion", !Ref JiraProduct, "fulldisplayname"]]
                     - !Sub ["ATL_JIRA_NAME=${JiraProductName}", JiraProductName: !FindInMap [ "JIRAProduct2NameAndVersion", !Ref JiraProduct, "name"]]
                     - !Sub ["ATL_JIRA_SHORT_DISPLAY_NAME=${JiraShortDisplayName}", JiraShortDisplayName: !FindInMap [ "JIRAProduct2NameAndVersion", !Ref JiraProduct, "shortdisplayname"]]
@@ -1002,34 +1130,53 @@ Resources:
                     - !Sub ["ATL_TOMCAT_MAXTHREADS=${TomcatMaxThreads}", TomcatMaxThreads: !Ref TomcatMaxThreads]
                     - !Sub ["ATL_TOMCAT_MINSPARETHREADS=${TomcatMinSpareThreads}", TomcatMinSpareThreads: !Ref TomcatMinSpareThreads]
                     - !Sub ["ATL_TOMCAT_PROTOCOL=${TomcatProtocol}", TomcatProtocol: !Ref TomcatProtocol]
-                    - !Sub ["ATL_TOMCAT_PROXYPORT=${TomcatProxyPort}", TomcatProxyPort: !If [SSLScheme, 443, 80]]
+                    - !Sub ["ATL_TOMCAT_PROXYPORT=${TomcatProxyPort}", TomcatProxyPort: !If [DoSSL, 443, 80]]
                     - !Sub ["ATL_TOMCAT_REDIRECTPORT=${TomcatRedirectPort}", TomcatRedirectPort: !Ref TomcatRedirectPort]
-                    - !Sub ["ATL_TOMCAT_SCHEME=${TomcatScheme}", TomcatScheme: !If [SSLScheme, https, http]]
-                    - !Sub ["ATL_TOMCAT_SECURE=${TomcatSecure}", TomcatSecure: !If [SSLScheme, true, false]]
+                    - !Sub ["ATL_TOMCAT_SCHEME=${TomcatScheme}", TomcatScheme: !If [DoSSL, https, http]]
+                    - !Sub ["ATL_TOMCAT_SECURE=${TomcatSecure}", TomcatSecure: !If [DoSSL, true, false]]
                     - !Sub ["ATL_DEPLOYMENT_REPOSITORY=${DeployRepository}", DeployRepository: !Ref "DeploymentAutomationRepository"]
                     - !Sub ["ATL_DEPLOYMENT_REPOSITORY_BRANCH=${DeployRepositoryBranch}", DeployRepositoryBranch: !Ref "DeploymentAutomationBranch"]
                     - !Sub ["ATL_DEPLOYMENT_REPOSITORY_PLAYBOOK=${DeployRepositoryPlaybook}", DeployRepositoryPlaybook: !Ref "DeploymentAutomationPlaybook"]
                     - !Sub ["ATL_DEPLOYMENT_REPOSITORY_KEYNAME=${DeployRepositoryKeyName}", DeployRepositoryKeyName: !Ref "DeploymentAutomationKeyName"]
+                    - !Sub ["ATL_DEPLOYMENT_REPOSITORY_CUSTOM_PARAMS='${DeployRepositoryCustomParams}'", DeployRepositoryCustomParams: !Ref "DeploymentAutomationCustomParams"]
+
+                    - !Sub ["ATL_AWS_ENABLE_CLOUDWATCH=${EnableCW}", EnableCW: !If [EnableCloudWatch, true, false]]
+                    - !Sub ["ATL_AWS_ENABLE_CLOUDWATCH_LOGS=${EnableCWLogs}", EnableCWLogs: !If [EnableCloudWatchLogs, true, false]]
 
             /opt/atlassian/bin/clone_deployment_repo:
               content: !Sub |
                 #!/bin/bash
                 key_location=/root/.ssh/deployment_repo_key
                 key_name="${DeploymentAutomationKeyName}"
+                ssm_pin=/${AWS::StackName}/pinned-ansible-sha
 
-                yum install -y git
+                yum install -y git awscli jq
+
                 if [[ ! -z "$key_name" ]]; then
                     # Ensure awscli is up to date
-                    yum install -y awscli jq
-                    key_val=$(aws --region=${AWS::Region} ssm get-parameters --names "$key_name" --with-decryption | jq --raw-output '.Parameters[0] .Value')
-                    echo -e $key_val > $key_location
+                    key_val=$(aws --region=${AWS::Region} ssm get-parameters --names "$key_name" --with-decryption | jq --raw-output '.Parameters[0].Value')
+                    echo -e "$key_val" > $key_location
                     chmod 600 $key_location
                     export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -i $key_location"
                 else
                     export GIT_SSH_COMMAND="ssh -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
                 fi
 
+                ### Ansible repo pinning ###
+                pinned_commit_id=$(aws --region=${AWS::Region} ssm get-parameters --names "$ssm_pin" | jq --raw-output '.Parameters[0].Value')
+
                 git clone "${DeploymentAutomationRepository}" -b "${DeploymentAutomationBranch}" /opt/atlassian/dc-deployments-automation/
+                cd /opt/atlassian/dc-deployments-automation/
+
+                if [[ "$pinned_commit_id" == "latest" || -z "$pinned_commit_id" ]]; then
+                  head_id=$(git rev-parse HEAD)
+                  echo "SSM param [$ssm_pin] has been set to 'latest' - Using the HEAD SHA [$head_id] to build cluster [${AWS::StackName}]"
+                  echo "Updating SSM param [$ssm_pin] with current HEAD SHA: [$head_id]"
+                  aws --region=${AWS::Region} ssm put-parameter --name "$ssm_pin" --value "$head_id" --overwrite --type String
+                else
+                  echo "Ansible repo has been pinned, checking out commit: [$pinned_commit_id]"
+                  git checkout -b "pinned-ansible-sha-$pinned_commit_id" "$pinned_commit_id"
+                fi
               mode: "000750"
               owner: root
               group: root
@@ -1058,9 +1205,11 @@ Resources:
           Ebs:
             VolumeSize: !Ref ClusterNodeVolumeSize
         - DeviceName: /dev/xvdf
-          Ebs: {}
           NoDevice: true
-      KeyName: !If [ KeyProvided, !Ref KeyPairName, !ImportValue ATL-DefaultKey ]
+      KeyName: !If
+        - KeyProvided
+        - !Ref KeyPairName
+        - Ref: AWS::NoValue
       IamInstanceProfile: !Ref JiraClusterNodeInstanceProfile
       ImageId:
         !FindInMap
@@ -1075,15 +1224,14 @@ Resources:
       UserData:
         Fn::Base64:
           !Join
-            - ""
-            -
-              - "#!/bin/bash -xe\n"
-              - "yum update -y aws-cfn-bootstrap\n"
-              - !Sub ["/opt/aws/bin/cfn-init -v --stack ${StackName}", StackName: !Ref "AWS::StackName"]
-              - !Sub [" --resource ClusterNodeLaunchConfig --region ${Region}\n", Region: !Ref "AWS::Region"]
-              - !Sub ["/opt/aws/bin/cfn-signal -e $? --stack ${StackName}", StackName: !Ref "AWS::StackName"]
-              - !Sub [" --resource ClusterNodeLaunchConfig --region ${Region}", Region: !Ref "AWS::Region"]
-
+          - ""
+          -
+            - "#!/bin/bash -xe\n"
+            - "yum update -y aws-cfn-bootstrap\n"
+            - !Sub ["/opt/aws/bin/cfn-init -v --stack ${StackName}", {StackName: !Ref "AWS::StackName"}]
+            - !Sub [" --resource ClusterNodeLaunchConfig --region ${Region}\n", {Region: !Ref "AWS::Region"}]
+            - !Sub ["/opt/aws/bin/cfn-signal -e $? --stack ${StackName}", {StackName: !Ref "AWS::StackName"}]
+            - !Sub [" --resource ClusterNodeLaunchConfig --region ${Region}", {Region: !Ref "AWS::Region"}]
   ElasticFileSystem:
     Type: AWS::EFS::FileSystem
     Properties:
@@ -1092,18 +1240,31 @@ Resources:
           Value: !Join [' ', [!Ref 'AWS::StackName', 'cluster shared-files']]
         - Key: Application
           Value: !Ref AWS::StackId
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: 967bce1c42a0ed818fae85170cc73cd53740220f"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 2020-08-18T11:21:04Z"
   EFSMountAz1:
     Type: AWS::EFS::MountTarget
     Properties:
       FileSystemId: !Ref ElasticFileSystem
       SecurityGroups: [!Ref SecurityGroup]
-      SubnetId: !Select [0, !Split [ ",", !ImportValue ATL-PriNets]]
+      SubnetId: !Select
+      - 0
+      - !Split
+           - ","
+           - Fn::ImportValue: !Sub "${ExportPrefix}PriNets"
   EFSMountAz2:
     Type: AWS::EFS::MountTarget
     Properties:
       FileSystemId: !Ref ElasticFileSystem
       SecurityGroups: [!Ref SecurityGroup]
-      SubnetId: !Select [1, !Split [ ",", !ImportValue ATL-PriNets]]
+      SubnetId: !Select
+        - 1
+        - !Split
+          - ","
+          - Fn::ImportValue: !Sub "${ExportPrefix}PriNets"
   EFSCname:
     Type: AWS::Route53::RecordSet
     Condition: UseHostedZone
@@ -1112,35 +1273,32 @@ Resources:
       Comment: Route53 cname for the efs
       Name: !If [ UseHostedZone, !Join ['.', [!Ref 'AWS::StackName', 'efs', !Ref 'HostedZone']], '']
       Type: CNAME
-      TTL: 900
+      TTL: '900'
       ResourceRecords:
         - !Join ['.', [!Ref ElasticFileSystem, 'efs', !Ref 'AWS::Region', 'amazonaws.com.']]
-# Database
+  # Database
   DB:
-    Type: AWS::RDS::DBInstance
+    Type: AWS::CloudFormation::Stack
     Properties:
-      AllocatedStorage: !Ref DBStorage
-      DBInstanceClass: !Ref DBInstanceClass
-      DBInstanceIdentifier: !Ref AWS::StackName
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      Engine: postgres
-      EngineVersion: 9.6
-      Iops: !If [DBProvisionedIops, !Ref DBIops, !Ref 'AWS::NoValue']
-      KmsKeyId: !If [UseDatabaseEncryption, !GetAtt EncryptionKey.Arn, !Ref 'AWS::NoValue']
-      MasterUsername: postgres
-      MasterUserPassword: !If [DoSetDBMasterUserPassword, !Ref DBMasterUserPassword, !Ref 'AWS::NoValue']
-      MultiAZ: !Ref DBMultiAZ
-      StorageEncrypted: !If [UseDatabaseEncryption, !Ref DBStorageEncrypted, !Ref 'AWS::NoValue']
-      StorageType: !If [DBProvisionedIops, io1, gp2]
-      Tags:
-        - Key: Name
-          Value: !Sub ["${StackName} Jira PostgreSQL Database", StackName: !Ref 'AWS::StackName']
-      VPCSecurityGroups: [!Ref SecurityGroup]
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: DBSubnetGroup
-      SubnetIds: !Split [ ",", !ImportValue ATL-PriNets]
+      TemplateURL: !Sub
+        - https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-atlassian-services/templates/quickstart-database-for-atlassian-services.yaml
+        - QSS3Region: !If ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
+      Parameters:
+        DatabaseImplementation: !Ref DBEngine
+        DBEngineVersion: !Ref DBEngineVersion
+        DBSecurityGroup: !Ref SecurityGroup
+        DBAutoMinorVersionUpgrade: "true"
+        DBBackupRetentionPeriod: "1"
+        DBInstanceClass: !Ref DBInstanceClass
+        DBIops: !Ref DBIops
+        DBMasterUserPassword: !Ref DBMasterUserPassword
+        DBMultiAZ: !Ref DBMultiAZ
+        DBAllocatedStorage: !Ref DBStorage
+        DBStorageEncrypted: !Ref DBStorageEncrypted
+        DBStorageType: !Ref DBStorageType
+        ExportPrefix: !Ref ExportPrefix
+        QSS3BucketName: !Ref QSS3BucketName
+        QSS3KeyPrefix: !Ref QSS3KeyPrefix
   DBCname:
     Condition: UseHostedZone
     Type: AWS::Route53::RecordSet
@@ -1149,53 +1307,98 @@ Resources:
       Comment: Route53 cname for the RDS
       Name: !Join ['.', [!Ref 'AWS::StackName', 'db', !Ref 'HostedZone']]
       Type: CNAME
-      TTL: 900
+      TTL: '900'
       ResourceRecords:
-        - !GetAtt DB.Endpoint.Address
-# Loadbalancer
+        - !GetAtt DB.Outputs.RDSEndPointAddress
+
+  # Loadbalancer
   LoadBalancer:
-    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      AppCookieStickinessPolicy:
-        - CookieName: JSESSIONID
-          PolicyName: JSessionIdStickiness
-      ConnectionDrainingPolicy:
-        Enabled: true
-        Timeout: 30
-      ConnectionSettings:
-        IdleTimeout: 3600
-      CrossZone: true
-      Listeners:
-        - LoadBalancerPort: 80
-          Protocol: HTTP
-          InstancePort: !Ref TomcatDefaultConnectorPort
-          InstanceProtocol: HTTP
-          PolicyNames:
-            - JSessionIdStickiness
-        - !If
-          - DoSSL
-          - LoadBalancerPort: '443'
-            Protocol: HTTPS
-            InstancePort: !Ref TomcatDefaultConnectorPort
-            InstanceProtocol: HTTP
-            PolicyNames:
-              - JSessionIdStickiness
-            SSLCertificateId: !Ref SSLCertificateARN
-          - !Ref AWS::NoValue
-      HealthCheck:
-        Target: !If [UseContextPath, !Join ['', ['HTTP:', !Ref TomcatDefaultConnectorPort, !Ref TomcatContextPath, '/status']], !Join ['', ['HTTP:', !Ref TomcatDefaultConnectorPort, '/status']]]
-        Timeout: 29
-        Interval: 30
-        UnhealthyThreshold: 2
-        HealthyThreshold: 2
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '3600'
       Scheme: !If [UsePublicIp, 'internet-facing', 'internal']
       SecurityGroups: [!Ref SecurityGroup]
-      Subnets: !Split [ ",", !ImportValue ATL-PubNets]
+      Subnets: !Split
+        - ","
+        - Fn::ImportValue: !Sub "${ExportPrefix}PubNets"
       Tags:
         - Key: Name
           Value: !Sub ["${StackName}-LoadBalancer", StackName: !Ref 'AWS::StackName']
         - Key: Cluster
           Value: !Ref AWS::StackName
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: 967bce1c42a0ed818fae85170cc73cd53740220f"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 2020-08-18T11:21:04Z"
+
+  LoadBalancerHTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - !If
+          - DoSSL
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              Host: '#{host}'
+              Path: '/#{path}'
+              Query: '#{query}'
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref MainTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+  LoadBalancerHTTPSListener:
+    Condition: DoSSL
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref SSLCertificateARN
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MainTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+  MainTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: !Ref TomcatDefaultConnectorPort
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
+      HealthCheckIntervalSeconds: 20
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200'
+      HealthCheckPath: !If [UseContextPath, !Join ['', [!Ref 'TomcatContextPath', '/status']], '/status']
+      HealthCheckPort: !Ref TomcatDefaultConnectorPort
+      HealthCheckProtocol: HTTP
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+      Tags:
+        - Key: Name
+          Value: MainTargetGroup
+        - Key: Cluster
+          Value: !Ref AWS::StackName
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: 967bce1c42a0ed818fae85170cc73cd53740220f"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 2020-08-18T11:21:04Z"
+    DependsOn:
+      - LoadBalancer
   LoadBalancerCname:
     Condition: UseHostedZone
     Type: AWS::Route53::RecordSet
@@ -1204,7 +1407,7 @@ Resources:
       Comment: Route53 cname for the ALB
       Name: !Join ['.', [!Ref "AWS::StackName", !Ref 'HostedZone']]
       Type: CNAME
-      TTL: 900
+      TTL: '900'
       ResourceRecords:
         - !GetAtt LoadBalancer.DNSName
   SecurityGroup:
@@ -1216,6 +1419,17 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref CidrBlock
+        - !If
+          - UseBastionHost
+          - IpProtocol: tcp
+            FromPort: 22
+            ToPort: 22
+            CidrIp:
+              !Sub
+                - "${BastionIp}/32"
+                - BastionIp:
+                    Fn::ImportValue: !Sub '${ExportPrefix}BastionPrivIp'
+          - Ref: AWS::NoValue
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -1224,21 +1438,60 @@ Resources:
           FromPort: 443
           ToPort: 443
           CidrIp: !Ref CidrBlock
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp:
+            !Sub
+              - "${NAT1IP}/32"
+              - NAT1IP:
+                  Fn::ImportValue: !Sub '${ExportPrefix}NAT1EIP'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp:
+            !Sub
+            - "${NAT2IP}/32"
+            - NAT2IP:
+                Fn::ImportValue: !Sub '${ExportPrefix}NAT2EIP'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            !Sub
+            - "${NAT1IP}/32"
+            - NAT1IP:
+                Fn::ImportValue: !Sub '${ExportPrefix}NAT1EIP'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            !Sub
+            - "${NAT2IP}/32"
+            - NAT2IP:
+                Fn::ImportValue: !Sub '${ExportPrefix}NAT2EIP'
       Tags:
         - Key: Name
           Value: !Join [' ', [!Ref "AWS::StackName", 'sg']]
-      VpcId: !ImportValue ATL-VPCID
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: 967bce1c42a0ed818fae85170cc73cd53740220f"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 2020-08-18T11:21:04Z"
+      VpcId:
+        Fn::ImportValue: !Sub "${ExportPrefix}VPCID"
   SecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref SecurityGroup
-      IpProtocol: -1
+      IpProtocol: '-1'
       FromPort: -1
       ToPort: -1
       SourceSecurityGroupId: !Ref SecurityGroup
   EncryptionKey:
     Condition: UseDatabaseEncryption
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Type: AWS::KMS::Key
     Properties:
       KeyPolicy:
@@ -1248,18 +1501,47 @@ Resources:
           - Effect: Allow
             Principal:
               AWS:
-                - !Sub "arn:aws:iam::${AWS::AccountId}:root"
+                - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
             Action: 'kms:*'
             Resource: '*'
       Tags:
         - Key: Name
-          Value: !Sub ["${StackName} Encryption Key", StackName: !Ref 'AWS::StackName']
+          Value: !Sub ["${StackName} Encryption Key", {StackName: !Ref 'AWS::StackName'}]
+        # NOTE: The leading COMMIT/TIMESTAMP are used to locate the position to update; see scripts/update-tags.py
+        - Key: "atl:quickstart:commit-id"
+          Value: "COMMIT: 967bce1c42a0ed818fae85170cc73cd53740220f"
+        - Key: "atl:quickstart:timestamp"
+          Value: "TIMESTAMP: 2020-08-18T11:21:04Z"
   EncryptionKeyAlias:
     Condition: UseDatabaseEncryption
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub "alias/${AWS::StackName}"
       TargetKeyId: !Ref EncryptionKey
+  AnsibleRepoPinSHA:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: "The dc-deployments-automation commit SHA that all nodes in the cluster will use"
+      Name: !Sub "/${AWS::StackName}/pinned-ansible-sha"
+      Type: String
+      AllowedPattern: '^(latest)|([0-9a-f]{5,40})$'
+      Value: "latest"
+
+  # Optional: Cloudwatch dashboard to be created when CloudWatch is enabled
+  CloudWatchDashboard:
+    DependsOn:
+      - DB
+    Condition: EnableCloudWatch
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub
+        - https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-atlassian-services/templates/quickstart-cloudwatch-dashboard.yaml
+        - QSS3Region: !If ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
+      Parameters:
+        ProductStackName: !Sub "${AWS::StackName}"
+        ProductFamilyName: !FindInMap [ "JIRAProduct2NameAndVersion", !Ref JiraProduct, "name"]
+        AsgToMonitor: !Ref ClusterNodeGroup
+
 Outputs:
   ServiceURL:
     Description: The URL to access this Atlassian service
@@ -1267,26 +1549,26 @@ Outputs:
       - UseCustomDnsName
       - !Sub
         - "${HTTP}://${CustomDNSName}${ContextPath}"
-        - HTTP: !If [SSLScheme, 'https', 'http']
+        - HTTP: !If [DoSSL, 'https', 'http']
           CustomDNSName: !Ref CustomDnsName
           ContextPath: !Ref TomcatContextPath
       - !If
         - UseHostedZone
         - !Sub
           - "${HTTP}://${LBCName}${ContextPath}"
-          - HTTP: !If [SSLScheme, 'https', 'http']
+          - HTTP: !If [DoSSL, 'https', 'http']
             LBCName: !Ref LoadBalancerCname
             ContextPath: !Ref TomcatContextPath
         - !Sub
           - "${HTTP}://${LoadBalancerDNSName}${ContextPath}"
-          - HTTP: !If [SSLScheme, 'https', 'http']
+          - HTTP: !If [DoSSL, 'https', 'http']
             LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName
             ContextPath: !Ref TomcatContextPath
   LoadBalancerURL:
     Description: The Load Balancer URL
     Value: !Sub
       - "${HTTP}://${LoadBalancerDNSName}"
-      - HTTP: !If [SSLScheme, 'https', 'http']
+      - HTTP: !If [DoSSL, 'https', 'http']
         LoadBalancerDNSName: !GetAtt LoadBalancer.DNSName
   SGname:
     Description: The name of the SecurityGroup
@@ -1296,7 +1578,7 @@ Outputs:
     }
   DBEndpointAddress:
     Description: The Database Connection String
-    Value: !GetAtt DB.Endpoint.Address
+    Value: !GetAtt DB.Outputs.RDSEndPointAddress
   DBEncryptionKey:
     Condition: UseDatabaseEncryption
     Description: The alias of the encryption key created for RDS
@@ -1310,3 +1592,7 @@ Outputs:
     Export: {
       Name: !Join ['', [!Ref 'AWS::StackName', '-EFSCname']]
     }
+  CloudWatchDashboardURL:
+    Description: CloudWatch monitoring dashboard URL
+    Value: !GetAtt CloudWatchDashboard.Outputs.Dashboard
+    Condition: EnableCloudWatch

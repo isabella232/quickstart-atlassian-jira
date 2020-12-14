@@ -3,7 +3,7 @@
 # As a rule, we should work to minimize our diffs between these files as best we can, so that future changes are easy to make across all supported CloudFormation templates.
 # Using YAML as our file format will allow us to put a block comment at the top of the file saying exactly this.
 AWSTemplateFormatVersion: 2010-09-09
-Description: Atlassian Jira Data Center with VPC
+Description: 'Atlassian Jira Data Center with VPC. (qs-1qup6ra30)'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -16,13 +16,21 @@ Metadata:
       - Label:
           default: Cluster nodes
         Parameters:
+          - CloudWatchIntegration
           - ClusterNodeInstanceType
           - ClusterNodeMax
           - ClusterNodeMin
           - ClusterNodeVolumeSize
+          - DeploymentAutomationRepository
+          - DeploymentAutomationBranch
+          - DeploymentAutomationPlaybook
+          - DeploymentAutomationKeyName
+          - DeploymentAutomationCustomParams
       - Label:
           default: Database
         Parameters:
+          - DBEngine
+          - DBEngineVersion
           - DBInstanceClass
           - DBIops
           - DBMasterUserPassword
@@ -32,13 +40,16 @@ Metadata:
           - DBStorageEncrypted
           - DBStorageType
       - Label:
+          default: Bastion host provisioning
+        Parameters:
+          - BastionHostRequired
+          - KeyPairName
+      - Label:
           default: Networking
         Parameters:
           - AccessCIDR
           - AvailabilityZones
-          - CidrBlock
           - InternetFacingLoadBalancer
-          - KeyPairName
           - PrivateSubnet1CIDR
           - PrivateSubnet2CIDR
           - PublicSubnet1CIDR
@@ -51,14 +62,7 @@ Metadata:
           - CustomDnsName
           - HostedZone
       - Label:
-          default: Cluster Node Deployment Repository; this is used to install and configure the application.
-        Parameters:
-          - DeploymentAutomationRepository
-          - DeploymentAutomationBranch
-          - DeploymentAutomationPlaybook
-          - DeploymentAutomationKeyName
-      - Label:
-          default: Application Tuning (Optional) - dbref - https://confluence.atlassian.com/display/AdminJIRAServer/Tuning+database+connections tomcatref - http://tomcat.apache.org/tomcat-7.0-doc/config/http.html
+          default: Application Tuning (Optional)
         Parameters:
             - TomcatContextPath
             - CatalinaOpts
@@ -76,19 +80,18 @@ Metadata:
             - DBTimeBetweenEvictionRunsMillis
             - MailEnabled
             - TomcatAcceptCount
-            - TomcatConnectionTimeout
             - TomcatDefaultConnectorPort
             - TomcatEnableLookups
             - TomcatMaxThreads
             - TomcatMinSpareThreads
             - TomcatProtocol
             - TomcatRedirectPort
-            - TomcatScheme
       - Label:
           default: AWS Quick Start Configuration
         Parameters:
           - QSS3BucketName
           - QSS3KeyPrefix
+          - ExportPrefix
 
     ParameterLabels:
       AccessCIDR:
@@ -97,8 +100,8 @@ Metadata:
         default: Availability Zones
       CatalinaOpts:
         default: Catalina options
-      CidrBlock:
-        default: Permitted IP range
+      CloudWatchIntegration:
+        default: Enable CloudWatch integration
       ClusterNodeMax:
         default: Maximum number of cluster nodes
       ClusterNodeMin:
@@ -108,7 +111,11 @@ Metadata:
       ClusterNodeVolumeSize:
         default: Cluster node instance volume size
       CustomDnsName:
-        default: Existing DNS name (optional)
+        default: Existing DNS name
+      DBEngine:
+        default: The database engine to deploy with
+      DBEngineVersion:
+        default: The database engine version to use
       DBInstanceClass:
         default: Database instance class
       DBIops:
@@ -152,11 +159,15 @@ Metadata:
       DeploymentAutomationBranch:
         default: Deployment Automation Branch
       DeploymentAutomationPlaybook:
-        default: The Ansible playbook to invoke to initialise the instance.
+        default: The Ansible playbook to invoke to initialize the instance
       DeploymentAutomationKeyName:
-        default: SSH keyname to use with the repository (Optional)
+        default: SSH keyname to use with the repository
+      DeploymentAutomationCustomParams:
+        default: Custom command-line parameters for Ansible
+      ExportPrefix:
+        default: ASI identifier
       HostedZone:
-        default: Route 53 Hosted Zone (optional)
+        default: Route 53 Hosted Zone
       InternetFacingLoadBalancer:
         default: Make instance internet facing
       JiraProduct:
@@ -165,8 +176,10 @@ Metadata:
         default: Version *
       JvmHeapOverride:
         default: JVM Heap Size Override
+      BastionHostRequired:
+          default: Deploy Bastion host
       KeyPairName:
-        default: Key Name *
+        default: SSH Key Pair Name
       MailEnabled:
         default: Enable App to Process Email
       PrivateSubnet1CIDR:
@@ -174,15 +187,13 @@ Metadata:
       PrivateSubnet2CIDR:
         default: AZ2 private IP address block
       PublicSubnet1CIDR:
-        default: AZ1 public IP address block        
+        default: AZ1 public IP address block
       PublicSubnet2CIDR:
         default: AZ2 public IP address block
       SSLCertificateARN:
         default: SSL Certificate ARN
       TomcatAcceptCount:
         default: Tomcat Accept Count
-      TomcatConnectionTimeout:
-        default: Tomcat Connection Timeout
       TomcatContextPath:
         default: Tomcat Context Path
       TomcatDefaultConnectorPort:
@@ -197,8 +208,6 @@ Metadata:
         default: Tomcat Protocol
       TomcatRedirectPort:
         default: Tomcat Redirect Port
-      TomcatScheme:
-        default: Tomcat protocol Scheme
 
       QSS3BucketName:
         default: Quick Start S3 Bucket Name
@@ -214,13 +223,12 @@ Parameters:
     Default: ''
     Description: Pass in any additional jvm options to tune Catalina
     Type: String
-  CidrBlock:
-    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
-    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
-    Description: CIDR block allowed to access the Atlassian product. This should be set to a trusted IP range; if you want to give public access use '0.0.0.0/0'.
+  CloudWatchIntegration:
+    Default: "Metrics and Logs"
     Type: String
-    MinLength: 9
-    MaxLength: 18
+    Description: "Enables CloudWatch metrics with or without log gathering. If cost is an issue, you can disable this altogether."
+    AllowedValues: ["Off", "Metrics Only", "Metrics and Logs"]
+    ConstraintDescription: "Must be 'Off', 'Metrics Only', or 'Metrics and Logs'"
   ClusterNodeInstanceType:
     Default: c5.xlarge
     AllowedValues:
@@ -333,39 +341,73 @@ Parameters:
     Default: ""
     Description: 'Use custom existing DNS name for your Data Center instance. This will take precedence over HostedZone. Please note: you must own the domain and configure it to point at the load balancer.'
     Type: String
-  DBInstanceClass:
-    Default: db.m4.large
+  DBEngine:
+    Default: 'PostgreSQL'
+    Description: 'Database Engine to use for the application. PostgreSQL or Amazon Aurora PostgreSQL'
     AllowedValues:
-      - db.m4.large
-      - db.m4.xlarge
-      - db.m4.2xlarge
-      - db.m4.4xlarge
-      - db.m4.10xlarge
-      - db.m4.16xlarge
+      - 'PostgreSQL'
+      - 'Amazon Aurora PostgreSQL'
+    ConstraintDescription: Must be 'Amazon Aurora PostgreSQL' or 'PostgreSQL'.
+    Type: String
+  DBEngineVersion:
+    Default: 9
+    AllowedValues:
+      - 9
+      - 10
+      - 11
+    Description: "The database engine version to use; we'll install a suitable minor version for your chosen engine. Make sure that the Jira version you're installing supports the database engine selected. Check https://confluence.atlassian.com/x/bqr1Nw to verify this."
+    Type: String
+  DBInstanceClass:
+    Default: db.m5.large
+    AllowedValues:
+      - db.m5.large
+      - db.m5.xlarge
+      - db.m5.2xlarge
+      - db.m5.4xlarge
+      - db.m5.12xlarge
+      - db.m5.24xlarge
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r5.12xlarge
+      - db.r5.24xlarge
       - db.r4.large
       - db.r4.xlarge
       - db.r4.2xlarge
       - db.r4.4xlarge
       - db.r4.8xlarge
       - db.r4.16xlarge
+      - db.m4.large
+      - db.m4.xlarge
+      - db.m4.2xlarge
+      - db.m4.4xlarge
+      - db.m4.10xlarge
+      - db.m4.16xlarge
+      - db.t3.medium
+      - db.t3.large
+      - db.t3.xlarge
+      - db.t3.2xlarge
       - db.t2.medium
       - db.t2.large
       - db.t2.xlarge
       - db.t2.2xlarge
     ConstraintDescription: Must be a valid RDS instance class, from the selection list
-    Description: RDS instance type
+    Description: RDS instance type (must be r family if using Aurora).
     Type: String
   DBIops:
     Default: 1000
     ConstraintDescription: 'Must be in the range 1000 - 30000'
-    Description: 'Must be in the range of 1000 - 30000 and a multiple of 1000. This value is only used with Provisioned IOPS. Note: The ratio of IOPS per allocated-storage must be between 3.00 and 10.00'
+    Description: 'Must be in the range of 1000 - 30000 and a multiple of 1000. This value is only used with Provisioned IOPS. Note: The ratio of IOPS per allocated-storage must be between 3.00 and 10.00 (not used for Aurora).'
     MaxValue: 30000
     MinValue: 1000
     Type: Number
   DBMasterUserPassword:
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must be at least 8 alphanumeric characters.
-    Description: Database admin account password.
+    AllowedPattern: >-
+      ^(?=^.{8,255}$)(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9])(?!.*[@/"']).*$
+    ConstraintDescription: >-
+      Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ + % &
+    Description: "Password for the master ('postgres') account. Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ + % &"
     NoEcho: True
     MaxLength: 128
     MinLength: 8
@@ -373,31 +415,31 @@ Parameters:
   DBMaxIdle:
     Default: 20
     Description: The maximum number of database connections that are allowed to remain idle in the pool
-    Type: String
+    Type: Number
   DBMaxWaitMillis:
     Default: 10000
     Description: The length of time (in milliseconds) that Jira is allowed to wait for a database connection to become available (while there are no free ones available in the pool), before returning an error
-    Type: String
+    Type: Number
   DBMinEvictableIdleTimeMillis:
     Default: 180000
     Description: The minimum amount of time an object may sit idle in the database connection pool before it is eligible for eviction by the idle object eviction
-    Type: String
+    Type: Number
   DBMinIdle:
     Default: 10
     Description: The minimum number of idle database connections that are kept open at any time
-    Type: String
+    Type: Number
   DBMultiAZ:
     Description: Whether to provision a multi-AZ RDS instance.
-    Default: true
+    Default: "true"
     AllowedValues:
-      - true
-      - false
+      - "true"
+      - "false"
     ConstraintDescription: Must be 'true' or 'false'.
     Type: String
   DBPassword:
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: Must be at least 8 alphanumeric characters.
-    Description: Database user account password.
+    AllowedPattern: '(?=^.{6,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*'
+    ConstraintDescription: 'Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ @ + % &'
+    Description: "Database password used by Jira. Must be at least 8 characters and include 1 uppercase, 1 lowercase, 1 number, and 1 of the following symbols: ! # $ { * : [ = , ] - _ @ + % &"
     MinLength: 8
     MaxLength: 128
     NoEcho: true
@@ -405,13 +447,16 @@ Parameters:
   DBPoolMaxSize:
     Default: 20
     Description: The maximum number of database connections that can be opened at any time
-    Type: String
+    Type: Number
   DBPoolMinSize:
     Default: 20
     Description: The minimum number of idle database connections that are kept open at any time
-    Type: String
+    Type: Number
   DBRemoveAbandoned:
-    Default: true
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
     Description: Flag to remove abandoned database connections if they exceed the Removed Abandoned Timeout
     Type: String
   DBRemoveAbandonedTimeout:
@@ -420,13 +465,13 @@ Parameters:
     Type: String
   DBStorage:
     Default: 200
-    Description: Database allocated storage size, in gigabytes (GB)
+    Description: Database allocated storage size, in gigabytes (GB). If you choose Provisioned IOPS, storage should be between 100 and 6144 (not used for Aurora).
     Type: Number
   DBStorageEncrypted:
-    Default: false
+    Default: "false"
     AllowedValues:
-      - true
-      - false
+      - "true"
+      - "false"
     Description: Whether or not to encrypt the database
     Type: String
   DBStorageType:
@@ -435,24 +480,30 @@ Parameters:
       - General Purpose (SSD)
       - Provisioned IOPS
     ConstraintDescription: Must be 'General Purpose (SSD)' or 'Provisioned IOPS'.
-    Description: Database storage type
+    Description: Database storage type (not used for Aurora).
     Type: String
   DBTestOnBorrow:
-    Default: false
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
     Description: Tests if the database connection is valid when it is borrowed from the database connection pool by Jira
     Type: String
   DBTestWhileIdle:
-    Default: true
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
     Description: Periodically tests if the database connection is valid when it is idle
     Type: String
   DBTimeBetweenEvictionRunsMillis:
     Default: 60000
     Description: The number of milliseconds to sleep between runs of the idle object eviction thread. When non-positive, no idle object eviction thread will be run
-    Type: String
+    Type: Number
   DeploymentAutomationRepository:
     Default: "https://bitbucket.org/atlassian/dc-deployments-automation.git"
     Type: String
-    Description: The deployment automation repository to use for per-node initialisation. Leave this as default unless you have customisations.
+    Description: The deployment automation repository to use for per-node initialization. Leave this as default unless you have customizations.
   DeploymentAutomationBranch:
     Default: "master"
     Type: String
@@ -461,10 +512,19 @@ Parameters:
     Default: "aws_jira_dc_node.yml"
     Type: String
     Description: The Ansible playbook to invoke to initialise the Jira node on first start.
+  DeploymentAutomationCustomParams:
+    Default: ""
+    Type: String
+    Description: Additional command-line options for the `ansible-playbook` command. See https://bitbucket.org/atlassian/dc-deployments-automation/src/master/README.md for more information about overriding parameters. (Optional)
   DeploymentAutomationKeyName:
     Default: ""
     Type: String
-    Description: Named KeyPair name to use with this repository. The key should be imported into the SSM parameter store. (Optional)
+    Description: Named Key Pair name to use with this repository. The key should be imported into the SSM parameter store. (Optional)
+  ExportPrefix:
+    Default: 'ATL-'
+    Description:
+      Identifier used in all variables (VPCID, SubnetIDs, KeyName) exported from this deployment's Atlassian Standard Infrastructure. Use different identifiers if you're deploying multiple Atlassian Standard Infrastructures in the same AWS region.
+    Type: String
   HostedZone:
     Default: ''
     ConstraintDescription: Must be the name of an existing Route53 Hosted Zone.
@@ -480,7 +540,7 @@ Parameters:
       - Software
       - ServiceDesk
   JiraVersion:
-    Default: 7.13.3
+    Default: "8.5.6"
     AllowedPattern: '(\d+\.\d+\.\d+(-?.*))|(latest)'
     ConstraintDescription: Must be a valid version number or 'latest'; for example, 8.1.0 for Jira Software, or 4.1.0 for ServiceDesk.
     Description: The version of Jira Software or Jira Service Desk to install. Find valid versions at https://confluence.atlassian.com/x/TVlNLg (Jira Software), https://confluence.atlassian.com/x/jh9-Lg (Jira Service Desk), or https://confluence.atlassian.com/x/XM2EO (Atlassian Enterprise Releases).
@@ -490,38 +550,41 @@ Parameters:
     Description: Override the default amount of memory to allocate to the JVM for your instance type - set size in meg or gig e.g. 1024m or 1g
     Type: String
   InternetFacingLoadBalancer:
-    Default: true
-    AllowedValues: [true, false]
+    Default: "true"
+    AllowedValues: ["true", "false"]
     ConstraintDescription: Must be 'true' or 'false'.
     Description: Controls whether the load balancer should be visible to the internet (true) or only within the VPC (false).
     Type: String
-  KeyPairName:
-    Default: ''
-    ConstraintDescription: Must be the name of an existing EC2 Key Pair.
-    Description: The EC2 Key Pair to allow SSH access to the instances
+  BastionHostRequired:
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Whether to provision a Bastion host instance. If 'true', then you need to provide an EC2 Key Pair (otherwise, you won't be able to use the Bastion host to access Jira instances).
     Type: String
+  KeyPairName:
+    ConstraintDescription: Must be the name of an existing EC2 Key Pair.
+    Description: Public/private EC2 Key Pairs to allow you to securely access the Bastion host
+    Type: String
+    Default: ''
   MailEnabled:
     AllowedValues:
-      - true
-      - false
+      - "true"
+      - "false"
     ConstraintDescription: Must be 'true' or 'false'.
-    Default: true
+    Default: "true"
     Description: Enable mail processing and sending
     Type: String
   SSLCertificateARN:
     Default: ''
-    Description: "Amazon Resource Name (ARN) of your SSL certificate. Every certificate created with the AWS Certificate Manager has a corresponding ARN. To use a certificate generated outside of AWS, you need to import it into AWS Certificate Manager first. AWS Certificate Manager will provide you with its ARN, which you can use here."
+    Description: "Amazon Resource Name (ARN) of your SSL certificate. Supplying this will automatically enable HTTPS on the product and load balancer, configured to use the corresponding certificate. If you want to use your own certificate that you generated outside of Amazon, you need to first import it to AWS Certificate Manager. After a successful import, you'll receive the ARN. If you want to create a certificate with AWS Certificate Manager (ACM certificate), you will receive the ARN after it's successfully created."
     MinLength: 0
     MaxLength: 90
     Type: String
   TomcatAcceptCount:
     Default: 10
     Description: The maximum queue length for incoming connection requests when all possible request processing threads are in use
-    Type: String
-  TomcatConnectionTimeout:
-    Default: 20000
-    Description: The number of milliseconds this Connector will wait, after accepting a connection, for the request URI line to be presented
-    Type: String
+    Type: Number
   TomcatContextPath:
     Default: ''
     AllowedPattern: '^(\/[A-z_\-0-9\.]+)?$'
@@ -530,19 +593,22 @@ Parameters:
   TomcatDefaultConnectorPort:
     Default: 8080
     Description: The port on which to serve the application
-    Type: String
+    Type: Number
   TomcatEnableLookups:
-    Default: false
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
     Description: Set to true if you want calls to request.getRemoteHost() to perform DNS lookups in order to return the actual host name of the remote client
     Type: String
   TomcatMaxThreads:
     Default: 200
     Description: The maximum number of request processing threads to be created by this Connector, which therefore determines the maximum number of simultaneous requests that can be handled
-    Type: String
+    Type: Number
   TomcatMinSpareThreads:
     Default: 10
     Description: The minimum number of threads always kept running
-    Type: String
+    Type: Number
   TomcatProtocol:
     Default: 'HTTP/1.1'
     Description: Sets the protocol to handle incoming traffic
@@ -550,20 +616,15 @@ Parameters:
   TomcatRedirectPort:
     Default: 8443
     Description: The port number for Catalina to use when automatically redirecting a non-SSL connector actioning a redirect to a SSL URI
-    Type: String
-  TomcatScheme:
-    Default: http
-    Description: "The name of the protocol you wish to have returned, ie 'https' for an SSL Connector. The value of this setting also configures Tomcat's proxy port (443/80) and secure (true/false) settings appropriately."
-    Type: String
-    AllowedValues: [http, https]
+    Type: Number
 
-    # VPC parameters
+  # VPC parameters
   AccessCIDR:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
     Description: CIDR Block allowed to access the Atlassian product. This should be set to a trusted IP range; if you want to give public access use '0.0.0.0/0'.
     Type: String
   AvailabilityZones:
-    Description: 'List of Availability Zones to use for the subnets in the VPC. Note: You must specify 2 AZs here; 
+    Description: 'List of Availability Zones to use for the subnets in the VPC. Note: You must specify 2 AZs here;
       if more are specified only the first 2 will be used.'
     Type: List<AWS::EC2::AvailabilityZone::Name>
   PrivateSubnet1CIDR:
@@ -614,9 +675,13 @@ Parameters:
 Conditions:
   UseDatabaseEncryption:
     !Equals [!Ref DBStorageEncrypted, true]
-  GovCloudCondition: !Equals
-    - !Ref 'AWS::Region'
-    - us-gov-west-1
+  GovCloudCondition:
+    !Equals [!Ref 'AWS::Region', 'us-gov-west-1']
+  KeyProvided:
+    !Not [!Equals [!Ref KeyPairName, '']]
+  ProvisionBastion: !And
+    - !Equals [!Ref BastionHostRequired, true]
+    - !Condition KeyProvided
 
 Resources:
   VPCStack:
@@ -633,12 +698,14 @@ Resources:
         AvailabilityZones: !Join
           - ','
           - !Ref 'AvailabilityZones'
+        ExportPrefix: !Ref 'ExportPrefix'
         KeyPairName: !Ref 'KeyPairName'
         PrivateSubnet1CIDR: !Ref 'PrivateSubnet1CIDR'
         PrivateSubnet2CIDR: !Ref 'PrivateSubnet2CIDR'
         PublicSubnet1CIDR: !Ref 'PublicSubnet1CIDR'
         PublicSubnet2CIDR: !Ref 'PublicSubnet2CIDR'
         VPCCIDR: !Ref 'VPCCIDR'
+        BastionHostRequired: !Ref 'BastionHostRequired'
 
   JiraDCStack:
     DependsOn: VPCStack
@@ -646,19 +713,18 @@ Resources:
     Properties:
       TemplateURL: !Sub
         - https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/quickstart-jira-dc.template.yaml
-        - QSS3Region: !If
-            - GovCloudCondition
-            - s3-us-gov-west-1
-            - s3
+        - QSS3Region: !If ["GovCloudCondition", "s3-us-gov-west-1", "s3"]
       Parameters:
-        InternetFacingLoadBalancer: !Ref 'InternetFacingLoadBalancer'
         CatalinaOpts: !Ref 'CatalinaOpts'
-        CidrBlock: !Ref 'CidrBlock'
+        CidrBlock: !Ref 'AccessCIDR'
+        CloudWatchIntegration: !Ref 'CloudWatchIntegration'
         ClusterNodeInstanceType: !Ref 'ClusterNodeInstanceType'
         ClusterNodeMax: !Ref 'ClusterNodeMax'
         ClusterNodeMin: !Ref 'ClusterNodeMin'
         ClusterNodeVolumeSize: !Ref 'ClusterNodeVolumeSize'
         CustomDnsName: !Ref 'CustomDnsName'
+        DBEngine: !Ref DBEngine
+        DBEngineVersion: !Ref DBEngineVersion
         DBInstanceClass: !Ref 'DBInstanceClass'
         DBIops: !Ref 'DBIops'
         DBMasterUserPassword: !Ref 'DBMasterUserPassword'
@@ -681,15 +747,20 @@ Resources:
         DeploymentAutomationRepository: !Ref 'DeploymentAutomationRepository'
         DeploymentAutomationBranch: !Ref 'DeploymentAutomationBranch'
         DeploymentAutomationKeyName: !Ref 'DeploymentAutomationKeyName'
+        DeploymentAutomationPlaybook: !Ref 'DeploymentAutomationPlaybook'
+        DeploymentAutomationCustomParams: !Ref 'DeploymentAutomationCustomParams'
+        ExportPrefix: !Ref 'ExportPrefix'
         HostedZone: !Ref 'HostedZone'
+        InternetFacingLoadBalancer: !Ref 'InternetFacingLoadBalancer'
         JiraProduct: !Ref 'JiraProduct'
         JiraVersion: !Ref 'JiraVersion'
         JvmHeapOverride: !Ref 'JvmHeapOverride'
         KeyPairName: !Ref 'KeyPairName'
         MailEnabled: !Ref 'MailEnabled'
+        QSS3BucketName: !Ref 'QSS3BucketName'
+        QSS3KeyPrefix: !Ref 'QSS3KeyPrefix'
         SSLCertificateARN: !Ref 'SSLCertificateARN'
         TomcatAcceptCount: !Ref 'TomcatAcceptCount'
-        TomcatConnectionTimeout: !Ref 'TomcatConnectionTimeout'
         TomcatContextPath: !Ref 'TomcatContextPath'
         TomcatDefaultConnectorPort: !Ref 'TomcatDefaultConnectorPort'
         TomcatEnableLookups: !Ref 'TomcatEnableLookups'
@@ -697,7 +768,7 @@ Resources:
         TomcatMinSpareThreads: !Ref 'TomcatMinSpareThreads'
         TomcatProtocol: !Ref 'TomcatProtocol'
         TomcatRedirectPort: !Ref 'TomcatRedirectPort'
-        TomcatScheme: !Ref 'TomcatScheme'
+        BastionHostRequired: !Ref 'BastionHostRequired'
 
 Outputs:
   ServiceURL:
@@ -707,8 +778,9 @@ Outputs:
     Description: The Load Balancer URL
     Value: !GetAtt 'JiraDCStack.Outputs.LoadBalancerURL'
   BastionIP:
+    Condition: ProvisionBastion
     Description: Bastion node IP (use as a jumpbox to connect to the nodes)
-    Value: !GetAtt 'VPCStack.Outputs.BastionPubIp'    
+    Value: !GetAtt 'VPCStack.Outputs.BastionPubIp'
   SGname:
     Description: The name of the SecurityGroup
     Value: !GetAtt 'JiraDCStack.Outputs.SGname'

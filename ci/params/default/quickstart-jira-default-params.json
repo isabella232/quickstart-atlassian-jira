@@ -32,22 +32,6 @@
         "ParameterValue": "0.0.0.0/0"
     },
     {
-        "ParameterKey": "CustomDnsName",
-        "ParameterValue": "replaced-by-taskcat-override-file"
-    },
-    {
-        "ParameterKey": "SSLCertificateARN",
-        "ParameterValue": "replaced-by-taskcat-override-file"
-    },
-    {
-        "ParameterKey": "ClusterNodeInstanceType",
-        "ParameterValue": "t3.medium"
-    },
-    {
-        "ParameterKey": "DBInstanceClass",
-        "ParameterValue": "db.t3.medium"
-    },
-    {
         "ParameterKey": "QSS3BucketName",
         "ParameterValue": "$[taskcat_autobucket]"
     },
@@ -56,7 +40,11 @@
         "ParameterValue": "quickstart-atlassian-jira/"
     },
     {
-        "ParameterKey": "BastionHostRequired",
-        "ParameterValue": "false"
+        "ParameterKey": "ClusterNodeInstanceType",
+        "ParameterValue": "t3.medium"
+    },
+    {
+        "ParameterKey": "DBInstanceClass",
+        "ParameterValue": "db.t3.medium"
     }
 ]

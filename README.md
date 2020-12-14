@@ -19,10 +19,30 @@ You need to create the required AWS networking infrastructure
 (VPC, subnets) by using the [ASI Quick Start](https://fwd.aws/xYyYy), or by deploying Jira with a new ASI.
 For details, see the [deployment guide](https://fwd.aws/Wz3Qb).
 
-### Contributing & issues
+## Deploying for production
 
-Please note that issues are disabled for this repository, because it is a
-downstream repository that is not actively supported.
-We welcome pull requests, issues, and comments in the **[upstream repository](https://bitbucket.org/atlassian/atlassian-aws-deployment/src/master/quickstarts/)**.
+For production deployments, avoid launching the Confluence Quick Start from the AWS Quick Start interface. If you do, any changes made to the Quick Start templates will propagate directly to your deployment. These updates sometimes introduce unexpected changes that could break your deployment.
 
-If you'd like to submit code for this Quick Start, please review the [AWS Quick Start Contributor's Kit](https://aws-quickstart.github.io/). 
+Instead, clone the Confluence Quick Start templates to a custom Amazon Simple Storage Service (Amazon S3) bucket. Then, launch the templates directly from the S3 bucket. This practice lets you control when to apply the latest changes to your environment. See [Launching from a cloned Quick Start (recommended for production)
+](https://confluence.atlassian.com/x/9qr1Nw#GettingstartedwithJiraDataCenteronAWS-s3bucketcustom) for instructions.
+
+## Development notes
+
+### Pre-commit hook
+
+It is recommended that you install the hooks under `submodules/quickstart-atlassian-services/scripts/hooks/`; this will
+ensure that the metadata tags in the templates are automatically updated on
+commit. The simplest method of doing this is:
+
+    git config --add core.hooksPath submodules/quickstart-atlassian-services/scripts/hooks/
+
+Alternatively you can invoke
+`submodules/quickstart-atlassian-services/scripts/hooks/update-tags.py`
+manually.
+
+## Atlassian support
+
+This Quick Start's CloudFormation templates were developed by Atlassian, in collaboration with AWS. To report an issue or request a feature, you can [contact Atlassian directly](https://support.atlassian.com/contact/#/).
+
+For additional Atlassian documentation on how to manage Quick Start deployments, see [Getting started with Jira Data Center on AWS](https://confluence.atlassian.com/x/9qr1Nw).
+
